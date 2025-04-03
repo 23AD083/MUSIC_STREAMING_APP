@@ -1,0 +1,75 @@
+// server/index.js (Backend - Node.js + Express)
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+app.use('/uploads', express.static('uploads'));
+
+// MongoDB Connection
+mongoose.connect('mongodb://localhost:27017/musicDB', { useNewUrlParser: true, useUnifiedTopology: true });
+
+const SongSchema = new mongoose.Schema({
+    title: String,
+    artist: String,
+    filePath: String
+});
+const Song = mongoose.model('Song', SongSchema);
+
+// File Upload Setup
+const storage = multer.diskStorage({
+    destination: './uploads/',
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
+const upload = multer({ storage });
+
+// Routes
+app.post('/upload', upload.single('song'), async (req, res) => {
+    const { title, artist } = req.body;
+    const newSong = new Song({ title, artist, filePath: req.file.path });
+    await newSong.save();
+    res.json({ message: 'Song uploaded!', song: newSong });
+});
+
+app.get('/songs', async (req, res) => {
+    const songs = await Song.find();
+    res.json(songs);
+});
+
+app.listen(5000, () => console.log('Server running on port 5000'));
+
+// client/src/App.js (Frontend - React.js)
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+
+const App = () => {
+    const [songs, setSongs] = useState([]);
+    
+    useEffect(() => {
+        axios.get('http://localhost:5000/songs').then(res => setSongs(res.data));
+    }, []);
+
+    return (
+        <div className='p-4'>
+            <h1 className='text-2xl font-bold'>Music Streaming App</h1>
+            <div className='mt-4'>
+                {songs.map(song => (
+                    <div key={song._id} className='border p-2 mb-2'>
+                        <h2>{song.title} - {song.artist}</h2>
+                        <audio controls>
+                            <source src={`http://localhost:5000/${song.filePath}`} type='audio/mp3' />
+                        </audio>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export default App;
